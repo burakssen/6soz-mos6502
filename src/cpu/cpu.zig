@@ -37,7 +37,7 @@ pub fn reset(self: *Cpu, bus: *Bus) void {
     self.a = 0;
     self.x = 0;
     self.y = 0;
-    self.sp = 0xff;
+    self.sp = 0xfd;
     self.status = Flag.U | Flag.I;
     self.pc = self.read16(bus, 0xfffc);
     self.cycles = 0;
@@ -413,23 +413,25 @@ fn brk(self: *Cpu, bus: *Bus) void {
     self.pc = self.read16(bus, 0xfffe);
 }
 
-pub fn nmi(self: *Cpu, bus: *Bus) void {
+pub fn nmi(self: *Cpu, bus: *Bus) u8 {
     self.push(bus, @as(u8, @truncate(self.pc >> 8)));
     self.push(bus, @as(u8, @truncate(self.pc)));
     self.push(bus, self.status & ~Flag.B);
     self.setFlag(Flag.I, true);
     self.pc = self.read16(bus, 0xfffa);
     self.cycles += 7;
+    return 7;
 }
 
-pub fn irq(self: *Cpu, bus: *Bus) void {
-    if (self.getFlag(Flag.I)) return;
+pub fn irq(self: *Cpu, bus: *Bus) u8 {
+    if (self.getFlag(Flag.I)) return 0;
     self.push(bus, @as(u8, @truncate(self.pc >> 8)));
     self.push(bus, @as(u8, @truncate(self.pc)));
     self.push(bus, self.status & ~Flag.B);
     self.setFlag(Flag.I, true);
     self.pc = self.read16(bus, 0xfffe);
     self.cycles += 7;
+    return 7;
 }
 
 fn cmp(self: *Cpu, lhs: u8, rhs: u8) void {

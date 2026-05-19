@@ -101,3 +101,17 @@ test "decimal-disabled CPU performs binary ADC with decimal flag set" {
 
     try std.testing.expectEqual(@as(u8, 0x0a), cpu.a);
 }
+
+test "reset uses NES stack pointer state" {
+    var test_bus = TestBus{};
+    var bus = Bus.init(&test_bus);
+
+    bus.write(0xfffc, 0x34);
+    bus.write(0xfffd, 0x12);
+
+    var cpu = Cpu{};
+    cpu.reset(&bus);
+
+    try std.testing.expectEqual(@as(u8, 0xfd), cpu.sp);
+    try std.testing.expectEqual(@as(u16, 0x1234), cpu.pc);
+}
