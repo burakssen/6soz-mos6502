@@ -1,0 +1,46 @@
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const bus_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/bus.zig"),
+    });
+
+    const cpu_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/cpu/cpu.zig"),
+        .imports = &.{
+            .{ .name = "bus", .module = bus_mod },
+        },
+    });
+
+    const core_mod = b.addModule("core", .{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/root.zig"),
+        .imports = &.{
+            .{ .name = "bus", .module = bus_mod },
+            .{ .name = "cpu", .module = cpu_mod },
+        },
+    });
+
+    const test_step = b.step("test", "Run core tests");
+
+    inline for (&.{core_mod}) |mod| {
+        const mod_test = b.addTest(.{ .root_module = mod });
+        const mod_cmd = b.addRunArtifact(mod_test);
+        test_step.dependOn(&mod_cmd.step);
+    }
+
+    const core = b.addLibrary(.{
+        .name = "core",
+        .root_module = core_mod,
+    });
+
+    b.installArtifact(core);
+}
