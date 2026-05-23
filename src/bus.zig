@@ -6,7 +6,6 @@ ptr: *anyopaque,
 
 read_fn: *const fn (ptr: *const anyopaque, addr: u16) u8,
 write_fn: *const fn (ptr: *anyopaque, addr: u16, value: u8) void,
-load_fn: *const fn (ptr: *anyopaque, start: u16, bytes: []const u8) void,
 
 pub fn init(ptr: anytype) Bus {
     const T = @TypeOf(ptr);
@@ -27,18 +26,12 @@ pub fn init(ptr: anytype) Bus {
             const self: T = @ptrCast(@alignCast(p));
             Child.write(self, addr, value);
         }
-
-        pub fn load(p: *anyopaque, start: u16, bytes: []const u8) void {
-            const self: T = @ptrCast(@alignCast(p));
-            Child.load(self, start, bytes);
-        }
     };
 
     return .{
         .ptr = ptr,
         .read_fn = VTable.read,
         .write_fn = VTable.write,
-        .load_fn = VTable.load,
     };
 }
 
@@ -48,8 +41,4 @@ pub fn read(self: Bus, addr: u16) u8 {
 
 pub fn write(self: Bus, addr: u16, value: u8) void {
     self.write_fn(self.ptr, addr, value);
-}
-
-pub fn load(self: Bus, start: u16, bytes: []const u8) void {
-    self.load_fn(self.ptr, start, bytes);
 }

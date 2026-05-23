@@ -7,7 +7,7 @@ const Instruction = @import("instruction.zig");
 const Addressing = @import("addressing.zig");
 
 const enums = @import("enums.zig");
-const AddressingMode = enums.AddressinMode;
+const AddressingMode = enums.AddressingMode;
 const Operation = enums.Operation;
 
 const table = @import("table.zig");
@@ -29,9 +29,8 @@ pc: u16 = 0,
 status: u8 = Flag.U | Flag.I,
 
 cycles: u64 = 0,
-stopped: bool = false,
 
-decimal_disabled: bool = false,
+decimal_disabled: bool = true,
 
 pub fn reset(self: *Cpu, bus: *Bus) void {
     self.a = 0;
@@ -41,12 +40,9 @@ pub fn reset(self: *Cpu, bus: *Bus) void {
     self.status = Flag.U | Flag.I;
     self.pc = self.read16(bus, 0xfffc);
     self.cycles = 0;
-    self.stopped = false;
 }
 
 pub fn step(self: *Cpu, bus: *Bus) CpuError!u8 {
-    if (self.stopped) return 0;
-
     const opcode = self.fetch(bus);
     const instruction = InstructionTable[opcode] orelse return CpuError.InvalidOpCode;
 

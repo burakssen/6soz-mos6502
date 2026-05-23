@@ -1,4 +1,4 @@
-pub const AddressinMode = enum {
+pub const AddressingMode = enum {
     imp, // Implied,
     acc, // Accumulator
     imm, // Immediate
