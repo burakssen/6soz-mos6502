@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const core_mod = b.addModule("core", .{
+    const mos6502_mod = b.addModule("mos6502", .{
         .target = target,
         .optimize = optimize,
         .root_source_file = b.path("src/root.zig"),
@@ -29,18 +29,18 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const test_step = b.step("test", "Run core tests");
+    const test_step = b.step("test", "Run MOS 6502 tests");
 
-    inline for (&.{core_mod}) |mod| {
+    inline for (&.{mos6502_mod}) |mod| {
         const mod_test = b.addTest(.{ .root_module = mod });
         const mod_cmd = b.addRunArtifact(mod_test);
         test_step.dependOn(&mod_cmd.step);
     }
 
-    const core = b.addLibrary(.{
-        .name = "core",
-        .root_module = core_mod,
+    const mos6502 = b.addLibrary(.{
+        .name = "mos6502",
+        .root_module = mos6502_mod,
     });
 
-    b.installArtifact(core);
+    b.installArtifact(mos6502);
 }

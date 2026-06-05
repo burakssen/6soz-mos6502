@@ -13,8 +13,17 @@ const Operation = enums.Operation;
 const table = @import("table.zig");
 const InstructionTable = table.InstructionTable;
 
-pub const CpuError = error{
-    InvalidOpCode,
+pub const Error = error{
+    InvalidOpcode,
+};
+
+pub const StepResult = struct {
+    cycles: u8,
+};
+
+pub const Variant = enum {
+    mos6502,
+    ricoh_2a03,
 };
 
 const Cpu = @This();
@@ -30,7 +39,7 @@ status: u8 = Flag.U | Flag.I,
 
 cycles: u64 = 0,
 
-decimal_disabled: bool = true,
+variant: Variant = .mos6502,
 
 pub fn reset(self: *Cpu, bus: *Bus) void {
     self.a = 0;
@@ -42,9 +51,13 @@ pub fn reset(self: *Cpu, bus: *Bus) void {
     self.cycles = 0;
 }
 
-pub fn step(self: *Cpu, bus: *Bus) CpuError!u8 {
+pub fn step(self: *Cpu, bus: *Bus) Error!StepResult {
+    const initial_pc = self.pc;
     const opcode = self.fetch(bus);
-    const instruction = InstructionTable[opcode] orelse return CpuError.InvalidOpCode;
+    const instruction = InstructionTable[opcode] orelse {
+        self.pc = initial_pc;
+        return Error.InvalidOpcode;
+    };
 
     const addressing = self.getOperandAddressing(bus, instruction.mode);
 
@@ -53,10 +66,10 @@ pub fn step(self: *Cpu, bus: *Bus) CpuError!u8 {
     const total_cycles = instruction.cycles + extra_cycles + (if (instruction.page_cycle and addressing.page_crossed) @as(u8, 1) else 0);
 
     self.cycles += total_cycles;
-    return total_cycles;
+    return .{ .cycles = total_cycles };
 }
 
-fn execute(self: *Cpu, bus: *Bus, op: Operation, address: u16, mode: AddressingMode, page_crossed: bool) CpuError!u8 {
+fn execute(self: *Cpu, bus: *Bus, op: Operation, address: u16, mode: AddressingMode, page_crossed: bool) Error!u8 {
     switch (op) {
         .adc => self.adc(bus.read(address)),
         .@"and" => self.@"and"(bus.read(address)),
@@ -238,7 +251,7 @@ fn push(self: *Cpu, bus: *Bus, value: u8) void {
     self.sp -%= 1;
 }
 
-fn pull(self: *Cpu, bus: *const Bus) u8 {
+fn pull(self: *Cpu, bus: *Bus) u8 {
     self.sp +%= 1;
     return bus.read(0x0100 | @as(u16, self.sp));
 }
@@ -287,7 +300,7 @@ fn branch(self: *Cpu, page_crossed: bool, condition: bool, addr: u16) u8 {
     return 1 + @as(u8, @intFromBool(page_crossed));
 }
 
-fn asl(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
+fn asl(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     self.setFlag(Flag.C, (val & 0x80) != 0);
     val <<= 1;
@@ -299,7 +312,7 @@ fn asl(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
     }
 }
 
-fn lsr(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
+fn lsr(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     self.setFlag(Flag.C, (val & 0x01) != 0);
     val >>= 1;
@@ -311,7 +324,7 @@ fn lsr(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
     }
 }
 
-fn rol(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
+fn rol(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     const old_c = if (self.getFlag(Flag.C)) @as(u8, 1) else @as(u8, 0);
     self.setFlag(Flag.C, (val & 0x80) != 0);
@@ -324,7 +337,7 @@ fn rol(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
     }
 }
 
-fn ror(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
+fn ror(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     const old_c = if (self.getFlag(Flag.C)) @as(u8, 0x80) else @as(u8, 0);
     self.setFlag(Flag.C, (val & 0x01) != 0);
@@ -337,13 +350,13 @@ fn ror(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) CpuError!void {
     }
 }
 
-fn inc(self: *Cpu, bus: *Bus, addr: u16) CpuError!void {
+fn inc(self: *Cpu, bus: *Bus, addr: u16) Error!void {
     const val = bus.read(addr) +% 1;
     bus.write(addr, val);
     self.setZN(val);
 }
 
-fn dec(self: *Cpu, bus: anytype, addr: u16) CpuError!void {
+fn dec(self: *Cpu, bus: anytype, addr: u16) Error!void {
     const val = bus.read(addr) -% 1;
     bus.write(addr, val);
     self.setZN(val);
@@ -354,7 +367,7 @@ fn adc(self: *Cpu, value: u8) void {
     const a = self.a;
     const b = value;
 
-    if (self.getFlag(Flag.D) and !self.decimal_disabled) {
+    if (self.getFlag(Flag.D) and self.variant == .mos6502) {
         var low = (a & 0x0f) + (b & 0x0f) + carry;
         if (low > 0x09) low += 0x06;
         var high = (a >> 4) + (b >> 4) + (if (low > 0x0f) @as(u16, 1) else 0);
@@ -378,7 +391,7 @@ fn adc(self: *Cpu, value: u8) void {
 }
 
 fn sbc(self: *Cpu, value: u8) void {
-    if (!self.getFlag(Flag.D) or self.decimal_disabled) {
+    if (!self.getFlag(Flag.D) or self.variant == .ricoh_2a03) {
         self.adc(value ^ 0xff);
     } else {
         const a = self.a;

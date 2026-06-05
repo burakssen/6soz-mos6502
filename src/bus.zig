@@ -4,7 +4,7 @@ const Bus = @This();
 
 ptr: *anyopaque,
 
-read_fn: *const fn (ptr: *const anyopaque, addr: u16) u8,
+read_fn: *const fn (ptr: *anyopaque, addr: u16) u8,
 write_fn: *const fn (ptr: *anyopaque, addr: u16, value: u8) void,
 
 pub fn init(ptr: anytype) Bus {
@@ -17,8 +17,8 @@ pub fn init(ptr: anytype) Bus {
     const Child = info.pointer.child;
 
     const VTable = struct {
-        pub fn read(p: *const anyopaque, addr: u16) u8 {
-            const self: *const Child = @ptrCast(@alignCast(p));
+        pub fn read(p: *anyopaque, addr: u16) u8 {
+            const self: T = @ptrCast(@alignCast(p));
             return Child.read(self, addr);
         }
 

@@ -1,7 +1,7 @@
 .{
-    .name = ._6soz_core,
+    .name = ._6soz_mos6502,
     .version = "0.0.1",
     .minimum_zig_version = "0.16.0",
-    .paths = .{""},
-    .fingerprint = 0xf3ac8a7a0607fe85,
+    .paths = .{ "build.zig", "build.zig.zon", "src", "README.md", "LICENCE" },
+    .fingerprint = 0x39fd19ccc61ed04d,
 }

@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const Bus = @import("bus");
 pub const Cpu = @import("cpu");
+pub const Variant = Cpu.Variant;
 
 const Flag = struct {
     const C: u8 = 1 << 0;
@@ -70,10 +71,10 @@ test "taken branch crossing a page costs four cycles" {
     test_bus.load(0x80fc, &.{ 0xd0, 0x02 });
 
     var cpu = Cpu{ .pc = 0x80fc };
-    const cycles_used = try cpu.step(&bus);
+    const result = try cpu.step(&bus);
 
     try std.testing.expectEqual(@as(u16, 0x8100), cpu.pc);
-    try std.testing.expectEqual(@as(u8, 4), cycles_used);
+    try std.testing.expectEqual(@as(u8, 4), result.cycles);
 }
 
 test "untaken branch crossing a page costs two cycles" {
@@ -83,13 +84,32 @@ test "untaken branch crossing a page costs two cycles" {
     test_bus.load(0x80fc, &.{ 0xf0, 0x02 });
 
     var cpu = Cpu{ .pc = 0x80fc };
-    const cycles_used = try cpu.step(&bus);
+    const result = try cpu.step(&bus);
 
     try std.testing.expectEqual(@as(u16, 0x80fe), cpu.pc);
-    try std.testing.expectEqual(@as(u8, 2), cycles_used);
+    try std.testing.expectEqual(@as(u8, 2), result.cycles);
 }
 
-test "default NES CPU performs binary ADC with decimal flag set" {
+test "Ricoh 2A03 performs binary ADC with decimal flag set" {
+    var test_bus = TestBus{};
+    var bus = Bus.init(&test_bus);
+    test_bus.load(0x8000, &.{
+        0xf8, // SED
+        0xa9, 0x09, // LDA #$09
+        0x18, // CLC
+        0x69, 0x01, // ADC #$01
+    });
+
+    var cpu = Cpu{ .pc = 0x8000, .variant = .ricoh_2a03 };
+    _ = try cpu.step(&bus);
+    _ = try cpu.step(&bus);
+    _ = try cpu.step(&bus);
+    _ = try cpu.step(&bus);
+
+    try std.testing.expectEqual(@as(u8, 0x0a), cpu.a);
+}
+
+test "MOS 6502 performs BCD ADC by default" {
     var test_bus = TestBus{};
     var bus = Bus.init(&test_bus);
     test_bus.load(0x8000, &.{
@@ -100,25 +120,6 @@ test "default NES CPU performs binary ADC with decimal flag set" {
     });
 
     var cpu = Cpu{ .pc = 0x8000 };
-    _ = try cpu.step(&bus);
-    _ = try cpu.step(&bus);
-    _ = try cpu.step(&bus);
-    _ = try cpu.step(&bus);
-
-    try std.testing.expectEqual(@as(u8, 0x0a), cpu.a);
-}
-
-test "generic 6502 CPU can opt into BCD ADC" {
-    var test_bus = TestBus{};
-    var bus = Bus.init(&test_bus);
-    test_bus.load(0x8000, &.{
-        0xf8, // SED
-        0xa9, 0x09, // LDA #$09
-        0x18, // CLC
-        0x69, 0x01, // ADC #$01
-    });
-
-    var cpu = Cpu{ .pc = 0x8000, .decimal_disabled = false };
     _ = try cpu.step(&bus);
     _ = try cpu.step(&bus);
     _ = try cpu.step(&bus);
@@ -204,21 +205,21 @@ test "absolute indexed load crossing a page costs an extra cycle" {
     bus.write(0x2100, 0x7f);
 
     var cpu = Cpu{ .pc = 0x8000, .x = 1 };
-    const cycles_used = try cpu.step(&bus);
+    const result = try cpu.step(&bus);
 
     try std.testing.expectEqual(@as(u8, 0x7f), cpu.a);
-    try std.testing.expectEqual(@as(u8, 5), cycles_used);
+    try std.testing.expectEqual(@as(u8, 5), result.cycles);
 }
 
-test "invalid opcode advances pc but does not add cycles" {
+test "invalid opcode does not mutate pc or cycles" {
     var test_bus = TestBus{};
     var bus = Bus.init(&test_bus);
 
     bus.write(0x8000, 0x02);
 
     var cpu = Cpu{ .pc = 0x8000, .cycles = 10 };
-    try std.testing.expectError(Cpu.CpuError.InvalidOpCode, cpu.step(&bus));
+    try std.testing.expectError(Cpu.Error.InvalidOpcode, cpu.step(&bus));
 
-    try std.testing.expectEqual(@as(u16, 0x8001), cpu.pc);
+    try std.testing.expectEqual(@as(u16, 0x8000), cpu.pc);
     try std.testing.expectEqual(@as(u64, 10), cpu.cycles);
 }
