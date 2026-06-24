@@ -4,29 +4,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const bus_mod = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .root_source_file = b.path("src/bus.zig"),
-    });
-
-    const cpu_mod = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .root_source_file = b.path("src/cpu/cpu.zig"),
-        .imports = &.{
-            .{ .name = "bus", .module = bus_mod },
-        },
-    });
-
     const mos6502_mod = b.addModule("mos6502", .{
         .target = target,
         .optimize = optimize,
         .root_source_file = b.path("src/root.zig"),
-        .imports = &.{
-            .{ .name = "bus", .module = bus_mod },
-            .{ .name = "cpu", .module = cpu_mod },
-        },
     });
 
     const test_step = b.step("test", "Run MOS 6502 tests");

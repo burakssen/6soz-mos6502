@@ -1,17 +1,392 @@
 const std = @import("std");
 
-const Bus = @import("bus");
+pub const Flag = struct {
+    pub const C: u8 = 1 << 0; // Carry
+    pub const Z: u8 = 1 << 1; // Zero
+    pub const I: u8 = 1 << 2; // Interrupt Disable
+    pub const D: u8 = 1 << 3; // Decimal
+    pub const B: u8 = 1 << 4; // Break
+    pub const U: u8 = 1 << 5; // Unused, usually set
+    pub const V: u8 = 1 << 6; // Overflow
+    pub const N: u8 = 1 << 7; // Negative
+};
 
-const Flag = @import("flag.zig");
-const Instruction = @import("instruction.zig");
-const Addressing = @import("addressing.zig");
+pub const AddressingMode = enum {
+    imp, // Implied
+    acc, // Accumulator
+    imm, // Immediate
+    zp,  // Zero Page
+    zpx, // Zero Page, X
+    zpy, // Zero Page, Y
+    rel, // Relative
+    abs, // Absolute
+    abx, // Absolute, X
+    aby, // Absolute, Y
+    ind, // Indirect
+    izx, // Indexed Indirect (X)
+    izy, // Indirect Indexed (Y)
+};
 
-const enums = @import("enums.zig");
-const AddressingMode = enums.AddressingMode;
-const Operation = enums.Operation;
+pub const Operation = enum {
+    adc,
+    @"and",
+    asl,
+    bcc,
+    bcs,
+    beq,
+    bit,
+    bmi,
+    bne,
+    bpl,
+    brk,
+    bvc,
+    bvs,
+    clc,
+    cld,
+    cli,
+    clv,
+    cmp,
+    cpx,
+    cpy,
+    dec,
+    dex,
+    dey,
+    eor,
+    inc,
+    inx,
+    iny,
+    jmp,
+    jsr,
+    lda,
+    ldx,
+    ldy,
+    lsr,
+    nop,
+    ora,
+    pha,
+    php,
+    pla,
+    plp,
+    rol,
+    ror,
+    rti,
+    rts,
+    sbc,
+    sec,
+    sed,
+    sei,
+    sta,
+    stx,
+    sty,
+    tax,
+    tay,
+    tsx,
+    txa,
+    txs,
+    tya,
+};
 
-const table = @import("table.zig");
-const InstructionTable = table.InstructionTable;
+pub const Addressing = struct {
+    addr: u16,
+    page_crossed: bool,
+};
+
+pub const Instruction = struct {
+    op: Operation,
+    mode: AddressingMode,
+    cycles: u8,
+    page_cycle: bool = false,
+};
+
+pub const InstructionTable = [256]?Instruction{
+    // 0x00
+    .{ .op = .brk, .mode = .imp, .cycles = 7 },
+    .{ .op = .ora, .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    null,
+    .{ .op = .ora, .mode = .zp, .cycles = 3 },
+    .{ .op = .asl, .mode = .zp, .cycles = 5 },
+    null,
+    .{ .op = .php, .mode = .imp, .cycles = 3 },
+    .{ .op = .ora, .mode = .imm, .cycles = 2 },
+    .{ .op = .asl, .mode = .acc, .cycles = 2 },
+    null,
+    null,
+    .{ .op = .ora, .mode = .abs, .cycles = 4 },
+    .{ .op = .asl, .mode = .abs, .cycles = 6 },
+    null,
+
+    // 0x10
+    .{ .op = .bpl, .mode = .rel, .cycles = 2 },
+    .{ .op = .ora, .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .ora, .mode = .zpx, .cycles = 4 },
+    .{ .op = .asl, .mode = .zpx, .cycles = 6 },
+    null,
+    .{ .op = .clc, .mode = .imp, .cycles = 2 },
+    .{ .op = .ora, .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .ora, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .asl, .mode = .abx, .cycles = 7 },
+    null,
+
+    // 0x20
+    .{ .op = .jsr, .mode = .abs, .cycles = 6 },
+    .{ .op = .@"and", .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    .{ .op = .bit, .mode = .zp, .cycles = 3 },
+    .{ .op = .@"and", .mode = .zp, .cycles = 3 },
+    .{ .op = .rol, .mode = .zp, .cycles = 5 },
+    null,
+    .{ .op = .plp, .mode = .imp, .cycles = 4 },
+    .{ .op = .@"and", .mode = .imm, .cycles = 2 },
+    .{ .op = .rol, .mode = .acc, .cycles = 2 },
+    null,
+    .{ .op = .bit, .mode = .abs, .cycles = 4 },
+    .{ .op = .@"and", .mode = .abs, .cycles = 4 },
+    .{ .op = .rol, .mode = .abs, .cycles = 6 },
+    null,
+
+    // 0x30
+    .{ .op = .bmi, .mode = .rel, .cycles = 2 },
+    .{ .op = .@"and", .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .@"and", .mode = .zpx, .cycles = 4 },
+    .{ .op = .rol, .mode = .zpx, .cycles = 6 },
+    null,
+    .{ .op = .sec, .mode = .imp, .cycles = 2 },
+    .{ .op = .@"and", .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .@"and", .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .rol, .mode = .abx, .cycles = 7 },
+    null,
+
+    // 0x40
+    .{ .op = .rti, .mode = .imp, .cycles = 6 },
+    .{ .op = .eor, .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    null,
+    .{ .op = .eor, .mode = .zp, .cycles = 3 },
+    .{ .op = .lsr, .mode = .zp, .cycles = 5 },
+    null,
+    .{ .op = .pha, .mode = .imp, .cycles = 3 },
+    .{ .op = .eor, .mode = .imm, .cycles = 2 },
+    .{ .op = .lsr, .mode = .acc, .cycles = 2 },
+    null,
+    .{ .op = .jmp, .mode = .abs, .cycles = 3 },
+    .{ .op = .eor, .mode = .abs, .cycles = 4 },
+    .{ .op = .lsr, .mode = .abs, .cycles = 6 },
+    null,
+
+    // 0x50
+    .{ .op = .bvc, .mode = .rel, .cycles = 2 },
+    .{ .op = .eor, .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .eor, .mode = .zpx, .cycles = 4 },
+    .{ .op = .lsr, .mode = .zpx, .cycles = 6 },
+    null,
+    .{ .op = .cli, .mode = .imp, .cycles = 2 },
+    .{ .op = .eor, .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .eor, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .lsr, .mode = .abx, .cycles = 7 },
+    null,
+
+    // 0x60
+    .{ .op = .rts, .mode = .imp, .cycles = 6 },
+    .{ .op = .adc, .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    null,
+    .{ .op = .adc, .mode = .zp, .cycles = 3 },
+    .{ .op = .ror, .mode = .zp, .cycles = 5 },
+    null,
+    .{ .op = .pla, .mode = .imp, .cycles = 4 },
+    .{ .op = .adc, .mode = .imm, .cycles = 2 },
+    .{ .op = .ror, .mode = .acc, .cycles = 2 },
+    null,
+    .{ .op = .jmp, .mode = .ind, .cycles = 5 },
+    .{ .op = .adc, .mode = .abs, .cycles = 4 },
+    .{ .op = .ror, .mode = .abs, .cycles = 6 },
+    null,
+
+    // 0x70
+    .{ .op = .bvs, .mode = .rel, .cycles = 2 },
+    .{ .op = .adc, .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .adc, .mode = .zpx, .cycles = 4 },
+    .{ .op = .ror, .mode = .zpx, .cycles = 6 },
+    null,
+    .{ .op = .sei, .mode = .imp, .cycles = 2 },
+    .{ .op = .adc, .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .adc, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .ror, .mode = .abx, .cycles = 7 },
+    null,
+
+    // 0x80
+    null,
+    .{ .op = .sta, .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    .{ .op = .sty, .mode = .zp, .cycles = 3 },
+    .{ .op = .sta, .mode = .zp, .cycles = 3 },
+    .{ .op = .stx, .mode = .zp, .cycles = 3 },
+    null,
+    .{ .op = .dey, .mode = .imp, .cycles = 2 },
+    null,
+    .{ .op = .txa, .mode = .imp, .cycles = 2 },
+    null,
+    .{ .op = .sty, .mode = .abs, .cycles = 4 },
+    .{ .op = .sta, .mode = .abs, .cycles = 4 },
+    .{ .op = .stx, .mode = .abs, .cycles = 4 },
+    null,
+
+    // 0x90
+    .{ .op = .bcc, .mode = .rel, .cycles = 2 },
+    .{ .op = .sta, .mode = .izy, .cycles = 6 },
+    null,
+    null,
+    .{ .op = .sty, .mode = .zpx, .cycles = 4 },
+    .{ .op = .sta, .mode = .zpx, .cycles = 4 },
+    .{ .op = .stx, .mode = .zpy, .cycles = 4 },
+    null,
+    .{ .op = .tya, .mode = .imp, .cycles = 2 },
+    .{ .op = .sta, .mode = .aby, .cycles = 5 },
+    .{ .op = .txs, .mode = .imp, .cycles = 2 },
+    null,
+    null,
+    .{ .op = .sta, .mode = .abx, .cycles = 5 },
+    null,
+    null,
+
+    // 0xa0
+    .{ .op = .ldy, .mode = .imm, .cycles = 2 },
+    .{ .op = .lda, .mode = .izx, .cycles = 6 },
+    .{ .op = .ldx, .mode = .imm, .cycles = 2 },
+    null,
+    .{ .op = .ldy, .mode = .zp, .cycles = 3 },
+    .{ .op = .lda, .mode = .zp, .cycles = 3 },
+    .{ .op = .ldx, .mode = .zp, .cycles = 3 },
+    null,
+    .{ .op = .tay, .mode = .imp, .cycles = 2 },
+    .{ .op = .lda, .mode = .imm, .cycles = 2 },
+    .{ .op = .tax, .mode = .imp, .cycles = 2 },
+    null,
+    .{ .op = .ldy, .mode = .abs, .cycles = 4 },
+    .{ .op = .lda, .mode = .abs, .cycles = 4 },
+    .{ .op = .ldx, .mode = .abs, .cycles = 4 },
+    null,
+
+    // 0xb0
+    .{ .op = .bcs, .mode = .rel, .cycles = 2 },
+    .{ .op = .lda, .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    .{ .op = .ldy, .mode = .zpx, .cycles = 4 },
+    .{ .op = .lda, .mode = .zpx, .cycles = 4 },
+    .{ .op = .ldx, .mode = .zpy, .cycles = 4 },
+    null,
+    .{ .op = .clv, .mode = .imp, .cycles = 2 },
+    .{ .op = .lda, .mode = .aby, .cycles = 4, .page_cycle = true },
+    .{ .op = .tsx, .mode = .imp, .cycles = 2 },
+    null,
+    .{ .op = .ldy, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .lda, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .ldx, .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+
+    // 0xc0
+    .{ .op = .cpy, .mode = .imm, .cycles = 2 },
+    .{ .op = .cmp, .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    .{ .op = .cpy, .mode = .zp, .cycles = 3 },
+    .{ .op = .cmp, .mode = .zp, .cycles = 3 },
+    .{ .op = .dec, .mode = .zp, .cycles = 5 },
+    null,
+    .{ .op = .iny, .mode = .imp, .cycles = 2 },
+    .{ .op = .cmp, .mode = .imm, .cycles = 2 },
+    .{ .op = .dex, .mode = .imp, .cycles = 2 },
+    null,
+    .{ .op = .cpy, .mode = .abs, .cycles = 4 },
+    .{ .op = .cmp, .mode = .abs, .cycles = 4 },
+    .{ .op = .dec, .mode = .abs, .cycles = 6 },
+    null,
+
+    // 0xd0
+    .{ .op = .bne, .mode = .rel, .cycles = 2 },
+    .{ .op = .cmp, .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .cmp, .mode = .zpx, .cycles = 4 },
+    .{ .op = .dec, .mode = .zpx, .cycles = 6 },
+    null,
+    .{ .op = .cld, .mode = .imp, .cycles = 2 },
+    .{ .op = .cmp, .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .cmp, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .dec, .mode = .abx, .cycles = 7 },
+    null,
+
+    // 0xe0
+    .{ .op = .cpx, .mode = .imm, .cycles = 2 },
+    .{ .op = .sbc, .mode = .izx, .cycles = 6 },
+    null,
+    null,
+    .{ .op = .cpx, .mode = .zp, .cycles = 3 },
+    .{ .op = .sbc, .mode = .zp, .cycles = 3 },
+    .{ .op = .inc, .mode = .zp, .cycles = 5 },
+    null,
+    .{ .op = .inx, .mode = .imp, .cycles = 2 },
+    .{ .op = .sbc, .mode = .imm, .cycles = 2 },
+    .{ .op = .nop, .mode = .imp, .cycles = 2 },
+    null,
+    .{ .op = .cpx, .mode = .abs, .cycles = 4 },
+    .{ .op = .sbc, .mode = .abs, .cycles = 4 },
+    .{ .op = .inc, .mode = .abs, .cycles = 6 },
+    null,
+
+    // 0xf0
+    .{ .op = .beq, .mode = .rel, .cycles = 2 },
+    .{ .op = .sbc, .mode = .izy, .cycles = 5, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .sbc, .mode = .zpx, .cycles = 4 },
+    .{ .op = .inc, .mode = .zpx, .cycles = 6 },
+    null,
+    .{ .op = .sed, .mode = .imp, .cycles = 2 },
+    .{ .op = .sbc, .mode = .aby, .cycles = 4, .page_cycle = true },
+    null,
+    null,
+    null,
+    .{ .op = .sbc, .mode = .abx, .cycles = 4, .page_cycle = true },
+    .{ .op = .inc, .mode = .abx, .cycles = 7 },
+    null,
+};
 
 pub const Error = error{
     InvalidOpcode,
@@ -41,7 +416,7 @@ cycles: u64 = 0,
 
 variant: Variant = .mos6502,
 
-pub fn reset(self: *Cpu, bus: *Bus) void {
+pub fn reset(self: *Cpu, bus: anytype) void {
     self.a = 0;
     self.x = 0;
     self.y = 0;
@@ -51,7 +426,7 @@ pub fn reset(self: *Cpu, bus: *Bus) void {
     self.cycles = 0;
 }
 
-pub fn step(self: *Cpu, bus: *Bus) Error!StepResult {
+pub fn step(self: *Cpu, bus: anytype) Error!StepResult {
     const initial_pc = self.pc;
     const opcode = self.fetch(bus);
     const instruction = InstructionTable[opcode] orelse {
@@ -69,7 +444,7 @@ pub fn step(self: *Cpu, bus: *Bus) Error!StepResult {
     return .{ .cycles = total_cycles };
 }
 
-fn execute(self: *Cpu, bus: *Bus, op: Operation, address: u16, mode: AddressingMode, page_crossed: bool) Error!u8 {
+fn execute(self: *Cpu, bus: anytype, op: Operation, address: u16, mode: AddressingMode, page_crossed: bool) Error!u8 {
     switch (op) {
         .adc => self.adc(bus.read(address)),
         .@"and" => self.@"and"(bus.read(address)),
@@ -175,25 +550,25 @@ fn execute(self: *Cpu, bus: *Bus, op: Operation, address: u16, mode: AddressingM
     return 0;
 }
 
-fn fetch(self: *Cpu, bus: *Bus) u8 {
+fn fetch(self: *Cpu, bus: anytype) u8 {
     const value = bus.read(self.pc);
     self.pc +%= 1;
     return value;
 }
 
-fn fetch16(self: *Cpu, bus: *Bus) u16 {
+fn fetch16(self: *Cpu, bus: anytype) u16 {
     const lo = self.fetch(bus);
     const hi = self.fetch(bus);
     return @as(u16, lo) | (@as(u16, hi) << 8);
 }
 
-fn read16(_: *Cpu, bus: *Bus, address: u16) u16 {
+fn read16(_: *Cpu, bus: anytype, address: u16) u16 {
     const lo = bus.read(address);
     const hi = bus.read(address +% 1);
     return @as(u16, lo) | (@as(u16, hi) << 8);
 }
 
-fn getOperandAddressing(self: *Cpu, bus: *Bus, mode: AddressingMode) Addressing {
+fn getOperandAddressing(self: *Cpu, bus: anytype, mode: AddressingMode) Addressing {
     return switch (mode) {
         .imp, .acc => .{ .addr = 0, .page_crossed = false },
         .imm => blk: {
@@ -246,12 +621,12 @@ fn getOperandAddressing(self: *Cpu, bus: *Bus, mode: AddressingMode) Addressing 
     };
 }
 
-fn push(self: *Cpu, bus: *Bus, value: u8) void {
+fn push(self: *Cpu, bus: anytype, value: u8) void {
     bus.write(0x0100 | @as(u16, self.sp), value);
     self.sp -%= 1;
 }
 
-fn pull(self: *Cpu, bus: *Bus) u8 {
+fn pull(self: *Cpu, bus: anytype) u8 {
     self.sp +%= 1;
     return bus.read(0x0100 | @as(u16, self.sp));
 }
@@ -300,7 +675,7 @@ fn branch(self: *Cpu, page_crossed: bool, condition: bool, addr: u16) u8 {
     return 1 + @as(u8, @intFromBool(page_crossed));
 }
 
-fn asl(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
+fn asl(self: *Cpu, bus: anytype, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     self.setFlag(Flag.C, (val & 0x80) != 0);
     val <<= 1;
@@ -312,7 +687,7 @@ fn asl(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     }
 }
 
-fn lsr(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
+fn lsr(self: *Cpu, bus: anytype, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     self.setFlag(Flag.C, (val & 0x01) != 0);
     val >>= 1;
@@ -324,7 +699,7 @@ fn lsr(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     }
 }
 
-fn rol(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
+fn rol(self: *Cpu, bus: anytype, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     const old_c = if (self.getFlag(Flag.C)) @as(u8, 1) else @as(u8, 0);
     self.setFlag(Flag.C, (val & 0x80) != 0);
@@ -337,7 +712,7 @@ fn rol(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     }
 }
 
-fn ror(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
+fn ror(self: *Cpu, bus: anytype, addr: u16, mode: AddressingMode) Error!void {
     var val = if (mode == .acc) self.a else bus.read(addr);
     const old_c = if (self.getFlag(Flag.C)) @as(u8, 0x80) else @as(u8, 0);
     self.setFlag(Flag.C, (val & 0x01) != 0);
@@ -350,7 +725,7 @@ fn ror(self: *Cpu, bus: *Bus, addr: u16, mode: AddressingMode) Error!void {
     }
 }
 
-fn inc(self: *Cpu, bus: *Bus, addr: u16) Error!void {
+fn inc(self: *Cpu, bus: anytype, addr: u16) Error!void {
     const val = bus.read(addr) +% 1;
     bus.write(addr, val);
     self.setZN(val);
@@ -413,7 +788,7 @@ fn sbc(self: *Cpu, value: u8) void {
     }
 }
 
-fn brk(self: *Cpu, bus: *Bus) void {
+fn brk(self: *Cpu, bus: anytype) void {
     const pc = self.pc +% 1;
     self.push(bus, @as(u8, @truncate(pc >> 8)));
     self.push(bus, @as(u8, @truncate(pc)));
@@ -422,7 +797,7 @@ fn brk(self: *Cpu, bus: *Bus) void {
     self.pc = self.read16(bus, 0xfffe);
 }
 
-pub fn nmi(self: *Cpu, bus: *Bus) u8 {
+pub fn nmi(self: *Cpu, bus: anytype) u8 {
     self.push(bus, @as(u8, @truncate(self.pc >> 8)));
     self.push(bus, @as(u8, @truncate(self.pc)));
     self.push(bus, self.status & ~Flag.B);
@@ -432,7 +807,7 @@ pub fn nmi(self: *Cpu, bus: *Bus) u8 {
     return 7;
 }
 
-pub fn irq(self: *Cpu, bus: *Bus) u8 {
+pub fn irq(self: *Cpu, bus: anytype) u8 {
     if (self.getFlag(Flag.I)) return 0;
     self.push(bus, @as(u8, @truncate(self.pc >> 8)));
     self.push(bus, @as(u8, @truncate(self.pc)));
