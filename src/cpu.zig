@@ -31,6 +31,7 @@ pub const Operation = enum {
     adc,
     @"and",
     asl,
+    axs,
     bcc,
     bcs,
     beq,
@@ -327,7 +328,7 @@ pub const InstructionTable = [256]?Instruction{
     .{ .op = .iny, .mode = .imp, .cycles = 2 },
     .{ .op = .cmp, .mode = .imm, .cycles = 2 },
     .{ .op = .dex, .mode = .imp, .cycles = 2 },
-    null,
+    .{ .op = .axs, .mode = .imm, .cycles = 2 },
     .{ .op = .cpy, .mode = .abs, .cycles = 4 },
     .{ .op = .cmp, .mode = .abs, .cycles = 4 },
     .{ .op = .dec, .mode = .abs, .cycles = 6 },
@@ -449,6 +450,7 @@ fn execute(self: *Cpu, bus: anytype, op: Operation, address: u16, mode: Addressi
         .adc => self.adc(bus.read(address)),
         .@"and" => self.@"and"(bus.read(address)),
         .asl => try self.asl(bus, address, mode),
+        .axs => self.axs(bus.read(address)),
         .bcc => return self.branch(page_crossed, !self.getFlag(Flag.C), address),
         .bcs => return self.branch(page_crossed, self.getFlag(Flag.C), address),
         .beq => return self.branch(page_crossed, self.getFlag(Flag.Z), address),
@@ -822,6 +824,13 @@ fn cmp(self: *Cpu, lhs: u8, rhs: u8) void {
     const result = lhs -% rhs;
     self.setFlag(Flag.C, lhs >= rhs);
     self.setZN(result);
+}
+
+fn axs(self: *Cpu, value: u8) void {
+    const lhs = self.a & self.x;
+    self.x = lhs -% value;
+    self.setFlag(Flag.C, lhs >= value);
+    self.setZN(self.x);
 }
 
 fn setZN(self: *Cpu, value: u8) void {

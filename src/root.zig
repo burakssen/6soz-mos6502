@@ -5,8 +5,10 @@ pub const Variant = Cpu.Variant;
 
 const Flag = struct {
     const C: u8 = 1 << 0;
+    const Z: u8 = 1 << 1;
     const B: u8 = 1 << 4;
     const U: u8 = 1 << 5;
+    const N: u8 = 1 << 7;
 };
 
 const TestBus = struct {
@@ -198,6 +200,39 @@ test "absolute indexed load crossing a page costs an extra cycle" {
 
     try std.testing.expectEqual(@as(u8, 0x7f), cpu.a);
     try std.testing.expectEqual(@as(u8, 5), result.cycles);
+}
+
+test "unofficial AXS immediate stores A and X minus operand in X" {
+    var test_bus = TestBus{};
+    test_bus.load(0x8000, &.{ 0xcb, 0x10 });
+
+    var cpu = Cpu{ .pc = 0x8000, .a = 0xff, .x = 0x30, .y = 0x42, .status = Flag.U };
+    const result = try cpu.step(&test_bus);
+
+    try std.testing.expectEqual(@as(u8, 0x20), cpu.x);
+    try std.testing.expectEqual(@as(u8, 0xff), cpu.a);
+    try std.testing.expectEqual(@as(u8, 0x42), cpu.y);
+    try std.testing.expectEqual(@as(u16, 0x8002), cpu.pc);
+    try std.testing.expectEqual(@as(u8, 2), result.cycles);
+    try std.testing.expectEqual(@as(u8, Flag.U | Flag.C), cpu.status);
+}
+
+test "unofficial AXS immediate reports borrow zero and negative results" {
+    var test_bus = TestBus{};
+    test_bus.load(0x8000, &.{
+        0xcb, 0x01,
+        0xcb, 0x01,
+    });
+
+    var zero_cpu = Cpu{ .pc = 0x8000, .a = 0x01, .x = 0xff, .status = Flag.U };
+    _ = try zero_cpu.step(&test_bus);
+    try std.testing.expectEqual(@as(u8, 0x00), zero_cpu.x);
+    try std.testing.expectEqual(@as(u8, Flag.U | Flag.C | Flag.Z), zero_cpu.status);
+
+    var negative_cpu = Cpu{ .pc = 0x8002, .a = 0x00, .x = 0xff, .status = Flag.U | Flag.C };
+    _ = try negative_cpu.step(&test_bus);
+    try std.testing.expectEqual(@as(u8, 0xff), negative_cpu.x);
+    try std.testing.expectEqual(@as(u8, Flag.U | Flag.N), negative_cpu.status);
 }
 
 test "invalid opcode does not mutate pc or cycles" {
